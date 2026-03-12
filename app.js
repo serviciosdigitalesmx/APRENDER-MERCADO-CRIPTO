@@ -389,13 +389,25 @@ function buildChart() {
         }
     });
 
-    candleSeries = chartApi.addCandlestickSeries({
+    const seriesOptions = {
         upColor: "#16a34a",
         downColor: "#dc2626",
         borderVisible: false,
         wickUpColor: "#16a34a",
         wickDownColor: "#dc2626"
-    });
+    };
+
+    // Compatibilidad: lightweight-charts v4 (addCandlestickSeries) y v5 (addSeries).
+    if (typeof chartApi.addCandlestickSeries === "function") {
+        candleSeries = chartApi.addCandlestickSeries(seriesOptions);
+    } else if (
+        typeof chartApi.addSeries === "function" &&
+        typeof LightweightCharts.CandlestickSeries === "function"
+    ) {
+        candleSeries = chartApi.addSeries(LightweightCharts.CandlestickSeries, seriesOptions);
+    } else {
+        throw new Error("API de lightweight-charts no compatible para velas.");
+    }
 
     const onResize = () => {
         const width = container.clientWidth;
