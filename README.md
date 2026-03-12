@@ -20,3 +20,10 @@ Abrir en navegador: `http://localhost:8080`
 
 - Si WebSocket de Binance falla por red o region, la app usa polling REST automatico para seguir actualizando datos.
 - No ejecuta operaciones reales; es solo simulacion educativa.
+
+## Radar Bot + Memoria (Google Sheets)
+
+1. Abre `apps_script/Code.gs` en un proyecto de Google Apps Script ligado a tu Sheet.
+2. Publica como Web App (acceso: Anyone with the link).
+3. Pega la URL en el campo `Apps Script Web App URL` del panel Radar y haz clic en `Guardar URL memoria`.
+4. Activa `Auto-trade sim` si quieres que el bot ejecute operaciones simuladas con el mejor setup.

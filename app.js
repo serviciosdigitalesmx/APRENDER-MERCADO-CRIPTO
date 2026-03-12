@@ -12,6 +12,7 @@ const FALLBACK_USDT_MXN = 17.0;
 const DEFAULT_BALANCE_MXN = 10000;
 
 const TOP_SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "TIAUSDT"];
+const RADAR_SYMBOLS = ["SOLUSDT", "AVAXUSDT", "LINKUSDT", "JUPUSDT", "BNBUSDT", "TRXUSDT", "ENAUSDT", "AEVOUSDT"];
 const TIMEFRAME_MAP = {
     "15m": "15m",
     "1h": "1h",
@@ -29,7 +30,11 @@ let appState = {
     leverage: 20,
     usdtMxn: FALLBACK_USDT_MXN,
     spotPositions: {},
-    perpPositions: []
+    perpPositions: [],
+    radarAutoTrade: false,
+    appScriptUrl: "",
+    memory: [],
+    lastAutoTradeBucket: ""
 };
 
 let market = new Map();
@@ -49,6 +54,7 @@ let klineSocket = null;
 let depthSocket = null;
 let mentorOpen = false;
 let mentorCursorMode = false;
+let radarInterval = null;
 
 function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
@@ -548,6 +554,219 @@ function renderTrainingPanel() {
     `;
 }
 
+function emaFromArray(values, period) {
+    if (values.length < period) return values[values.length - 1] || 0;
+    const k = 2 / (period + 1);
+    let ema = values.slice(0, period).reduce((s, x) => s + x, 0) / period;
+    for (let i = period; i < values.length; i += 1) {
+        ema = values[i] * k + ema * (1 - k);
+    }
+    return ema;
+}
+
+function rsiFromArray(values, period = 14) {
+    if (values.length < period + 1) return 50;
+    let gains = 0;
+    let losses = 0;
+    for (let i = values.length - period; i < values.length; i += 1) {
+        const diff = values[i] - values[i - 1];
+        if (diff >= 0) gains += diff;
+        else losses += Math.abs(diff);
+    }
+    if (losses === 0) return 100;
+    const rs = gains / losses;
+    return 100 - 100 / (1 + rs);
+}
+
+function stdDev(values) {
+    if (!values.length) return 0;
+    const mean = values.reduce((s, x) => s + x, 0) / values.length;
+    const variance = values.reduce((s, x) => s + (x - mean) ** 2, 0) / values.length;
+    return Math.sqrt(variance);
+}
+
+function adxApprox(high, low, close, period = 14) {
+    if (close.length < period + 2) return 20;
+    let trend = 0;
+    for (let i = close.length - period; i < close.length; i += 1) {
+        const move = Math.abs(close[i] - close[i - 1]);
+        const range = Math.max(high[i] - low[i], 0.000001);
+        trend += move / range;
+    }
+    return (trend / period) * 20;
+}
+
+async function fetchFuturesKlines(symbol) {
+    return fetchJson(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=5m&limit=200`);
+}
+
+function analyzeRadarRows(rows) {
+    const close = rows.map((r) => Number(r[4]));
+    const high = rows.map((r) => Number(r[2]));
+    const low = rows.map((r) => Number(r[3]));
+
+    const ema20 = emaFromArray(close, 20);
+    const ema50 = emaFromArray(close, 50);
+    const rsi = rsiFromArray(close, 14);
+
+    const ema12 = emaFromArray(close, 12);
+    const ema26 = emaFromArray(close, 26);
+    const macdLine = ema12 - ema26;
+    const macdSignal = emaFromArray(close.map((_, i) => {
+        const partial = close.slice(0, i + 1);
+        return emaFromArray(partial, 12) - emaFromArray(partial, 26);
+    }), 9);
+
+    const adx = adxApprox(high, low, close, 14);
+    const bbBasis = close.slice(-20).reduce((s, x) => s + x, 0) / 20;
+    const bbStd = stdDev(close.slice(-20));
+    const bbHigh = bbBasis + bbStd * 2;
+    const bbLow = bbBasis - bbStd * 2;
+
+    const price = close[close.length - 1];
+    const momentum = close.slice(-5).reduce((s, x, i, arr) => i === 0 ? s : s + (x - arr[i - 1]), 0) / 4;
+
+    let score = 0;
+    const notes = [];
+
+    if (ema20 > ema50) { score += 1; notes.push("tendencia alcista"); } else score -= 1;
+    if (rsi > 55) { score += 1; notes.push("compradores dominan"); }
+    if (rsi < 45) score -= 1;
+    if (macdLine > macdSignal) { score += 1; notes.push("MACD alcista"); } else score -= 1;
+    if (momentum > 0) score += 1; else score -= 1;
+    if (adx > 25) { score += 2; notes.push("tendencia fuerte"); }
+    if (price > bbHigh) { score += 2; notes.push("rompimiento"); }
+    if (price < bbLow) score -= 2;
+
+    const up = Math.min(100, Math.max(0, 50 + score * 7));
+    const down = 100 - up;
+    const decision = up > 60 ? "ARRIBA" : down > 60 ? "ABAJO" : "ESPERAR";
+    return { price, score, up, down, decision, notes: notes.join(", ") || "sin señal fuerte" };
+}
+
+function radarNextTimer() {
+    const now = new Date();
+    const totalSec = now.getUTCMinutes() * 60 + now.getUTCSeconds();
+    return 300 - (totalSec % 300);
+}
+
+async function logMemoryToAppsScript(payload) {
+    if (!appState.appScriptUrl) return;
+    try {
+        await fetch(appState.appScriptUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+    } catch (_err) {
+        // Optional sink: ignore network failures.
+    }
+}
+
+function renderRadarPanel(results) {
+    const sorted = [...results].sort((a, b) => b.score - a.score);
+    const best = sorted[0];
+
+    document.getElementById("radarBestSymbol").textContent = best?.symbol || "-";
+    document.getElementById("radarBestPrice").textContent = best ? formatMxn(usdtToMxn(best.price)) : "-";
+    document.getElementById("radarBestScore").textContent = best ? String(best.score) : "-";
+    document.getElementById("radarBestDecision").textContent = best?.decision || "-";
+    document.getElementById("radarNotes").textContent = best ? best.notes : "Sin notas";
+    document.getElementById("radarTimer").textContent = `${radarNextTimer()}s`;
+
+    const rows = sorted.map((r) => `
+        <div class="order-row ${r.decision === "ARRIBA" ? "bids" : r.decision === "ABAJO" ? "asks" : ""}">
+            <span>${r.symbol}</span>
+            <span>${r.score}</span>
+            <span>${r.up.toFixed(0)}%</span>
+            <span>${r.decision}</span>
+        </div>
+    `).join("");
+    document.getElementById("radarRows").innerHTML = rows;
+}
+
+function autoTradeFromRadar(best) {
+    if (!appState.radarAutoTrade || !best) return;
+    if (!(best.score >= 7 && (best.decision === "ARRIBA" || best.decision === "ABAJO"))) return;
+
+    const bucket = `${best.symbol}-${Math.floor(Date.now() / 300000)}`;
+    if (appState.lastAutoTradeBucket === bucket) return;
+
+    appState.selectedSymbol = best.symbol;
+    document.getElementById("symbolName").textContent = best.symbol;
+
+    const entryMxn = usdtToMxn(best.price);
+    const stopMxn = best.decision === "ARRIBA" ? entryMxn * 0.992 : entryMxn * 1.008;
+    const takeMxn = best.decision === "ARRIBA" ? entryMxn * 1.015 : entryMxn * 0.985;
+    const riskBudget = appState.balanceMxn * 0.01;
+    const qty = Math.max(0.001, riskBudget / Math.max(Math.abs(entryMxn - stopMxn), 1));
+
+    document.getElementById("priceInput").value = entryMxn.toFixed(2);
+    document.getElementById("stopInput").value = stopMxn.toFixed(2);
+    document.getElementById("takeInput").value = takeMxn.toFixed(2);
+    document.getElementById("amountInput").value = qty.toFixed(4);
+    renderBalanceAndTotal();
+
+    if (best.decision === "ARRIBA") executePerp("LONG");
+    else executePerp("SHORT");
+
+    refreshSymbolData().catch(() => {});
+
+    appState.lastAutoTradeBucket = bucket;
+    const memoryEntry = {
+        ts: new Date().toISOString(),
+        symbol: best.symbol,
+        decision: best.decision,
+        score: best.score,
+        up: best.up,
+        down: best.down,
+        notes: best.notes
+    };
+    appState.memory.unshift(memoryEntry);
+    appState.memory = appState.memory.slice(0, 400);
+    saveState();
+    logMemoryToAppsScript(memoryEntry);
+}
+
+async function runRadar() {
+    try {
+        const results = await Promise.all(RADAR_SYMBOLS.map(async (symbol) => {
+            const rows = await fetchFuturesKlines(symbol);
+            const analysis = analyzeRadarRows(rows);
+            market.set(symbol, {
+                lastPrice: analysis.price,
+                changePct: analysis.up - 50,
+                high: analysis.price,
+                low: analysis.price
+            });
+            return { symbol, ...analysis };
+        }));
+
+        renderRadarPanel(results);
+        const best = [...results].sort((a, b) => b.score - a.score)[0];
+        autoTradeFromRadar(best);
+    } catch (_err) {
+        document.getElementById("radarNotes").textContent = "Error temporal al leer radar.";
+    }
+}
+
+function wireRadarControls() {
+    const auto = document.getElementById("radarAutoTrade");
+    auto.checked = Boolean(appState.radarAutoTrade);
+    auto.addEventListener("change", (e) => {
+        appState.radarAutoTrade = e.target.checked;
+        saveState();
+    });
+
+    const urlInput = document.getElementById("appScriptUrl");
+    urlInput.value = appState.appScriptUrl || "";
+    document.getElementById("saveAppScriptBtn").addEventListener("click", () => {
+        appState.appScriptUrl = urlInput.value.trim();
+        saveState();
+        setTradeHint(appState.appScriptUrl ? "URL de Apps Script guardada." : "URL vacía: memoria solo local.", "ok");
+    });
+}
+
 function renderPositions() {
     const container = document.getElementById("positions");
     const rows = [];
@@ -970,10 +1189,14 @@ async function initialize() {
     wireEvents();
     wireMentorHotkeys();
     wireMentorCursorMode();
+    wireRadarControls();
     setMentorBadge();
 
     await loadInitialMarket();
     await refreshSymbolData();
+    await runRadar();
+    if (radarInterval) clearInterval(radarInterval);
+    radarInterval = setInterval(runRadar, 20000);
     startTickerPolling();
     renderBalanceAndTotal();
     renderPositions();

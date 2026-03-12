@@ -426,6 +426,15 @@ body {
     color: #f6465d;
 }
 
+#radarRows .order-row {
+    grid-template-columns: 1.1fr 0.9fr 0.8fr 1fr;
+    font-size: 12px;
+}
+
+#saveAppScriptBtn {
+    margin-bottom: 10px;
+}
+
 .mentor-overlay {
     position: fixed;
     inset: 0;
