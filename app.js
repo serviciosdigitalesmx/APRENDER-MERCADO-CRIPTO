@@ -48,6 +48,7 @@ let tickerSocket = null;
 let klineSocket = null;
 let depthSocket = null;
 let mentorOpen = false;
+let mentorCursorMode = false;
 
 function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
@@ -630,6 +631,132 @@ function closeMentor() {
     mentorOpen = false;
 }
 
+function setMentorBadge() {
+    const badge = document.getElementById("mentorModeBadge");
+    if (!badge) return;
+    if (mentorCursorMode) {
+        badge.classList.add("on");
+        badge.textContent = "Mentor cursor: ON (Ctrl/⌘ + K)";
+    } else {
+        badge.classList.remove("on");
+        badge.textContent = "Mentor cursor: OFF (Ctrl/⌘ + K)";
+    }
+}
+
+function parseNumberFromText(text) {
+    const clean = String(text || "").replace(/[^0-9.-]/g, "");
+    const num = Number(clean);
+    return Number.isFinite(num) ? num : null;
+}
+
+function getMentorContextText(target) {
+    if (!target) return "";
+
+    const tickerItem = target.closest(".ticker-item");
+    if (tickerItem) {
+        const symbol = tickerItem.querySelector(".ticker-symbol")?.textContent?.trim() || "Activo";
+        const price = tickerItem.querySelector(".ticker-price")?.textContent?.trim() || "-";
+        const change = tickerItem.querySelector(".ticker-change")?.textContent?.trim() || "-";
+        return `<strong>${symbol}</strong><br>Este es el ticker rápido. Precio actual: ${price}. Cambio 24h: ${change}. Si el porcentaje es verde, subió; si es rojo, bajó.`;
+    }
+
+    if (target.closest("#chartContainer")) {
+        const last = candles[candles.length - 1];
+        const ma7 = calcMA(candles, 7).at(-1)?.value;
+        const ma25 = calcMA(candles, 25).at(-1)?.value;
+        if (!last) return "<strong>Gráfico</strong><br>Aquí ves velas de precio. La altura vertical representa precio: más arriba = precio más alto.";
+        const priceMxn = formatMxn(usdtToMxn(last.close));
+        const trend = ma7 && ma25 ? (ma7 > ma25 ? "sesgo alcista" : "sesgo bajista") : "sesgo neutral";
+        return `<strong>Gráfico de velas</strong><br>Precio actual aproximado: ${priceMxn}.<br>La altura en el gráfico indica nivel de precio. MA7 vs MA25 sugiere ${trend}.`;
+    }
+
+    const orderRow = target.closest(".order-row");
+    if (orderRow) {
+        const type = orderRow.classList.contains("asks") ? "venta (ask)" : "compra (bid)";
+        const priceText = orderRow.querySelector(".price-cell")?.textContent?.trim() || "-";
+        const qtyText = orderRow.querySelector(".amount-cell")?.textContent?.trim() || "-";
+        const totalText = orderRow.querySelector(".total-cell")?.textContent?.trim() || "-";
+        return `<strong>Order Book: ${type}</strong><br>Precio: ${priceText}<br>Cantidad: ${qtyText}<br>Total: ${totalText}<br>Filas más cercanas al precio actual tienen mayor probabilidad de ejecutarse pronto.`;
+    }
+
+    if (target.closest("#priceInput")) {
+        return "<strong>Precio de orden (MXN)</strong><br>Este es el precio límite al que quieres operar. Si compras, ponerlo más bajo puede tardar más en ejecutarse.";
+    }
+
+    if (target.closest("#amountInput")) {
+        return "<strong>Cantidad</strong><br>Cuánto activo quieres comprar o vender. Multiplicado por el precio te da el total en MXN.";
+    }
+
+    if (target.closest("#totalAmount")) {
+        return "<strong>Total de orden</strong><br>Este es el costo estimado de tu operación en pesos mexicanos.";
+    }
+
+    const pos = target.closest(".position-item");
+    if (pos) {
+        const pnlText = pos.children[3]?.textContent?.trim() || "-";
+        return `<strong>Posición abierta</strong><br>Aquí ves una operación activa. El PnL cambia en tiempo real según el mercado.<br>PnL actual: ${pnlText}.`;
+    }
+
+    if (target.closest("#currentPrice")) {
+        const txt = document.getElementById("currentPrice")?.textContent?.trim() || "-";
+        return `<strong>Precio actual</strong><br>Precio instantáneo del par seleccionado: ${txt}. Sirve como referencia para tus entradas/salidas.`;
+    }
+
+    if (target.closest("#priceChange")) {
+        const txt = document.getElementById("priceChange")?.textContent?.trim() || "-";
+        return `<strong>Cambio 24h</strong><br>Variación porcentual del día: ${txt}. Te da contexto de momentum diario.`;
+    }
+
+    return "";
+}
+
+function hideMentorCursorTip() {
+    const tip = document.getElementById("mentorCursorTip");
+    if (!tip) return;
+    tip.classList.remove("open");
+    tip.setAttribute("aria-hidden", "true");
+}
+
+function showMentorCursorTip(html, x, y) {
+    const tip = document.getElementById("mentorCursorTip");
+    if (!tip) return;
+    tip.innerHTML = html;
+    tip.classList.add("open");
+    tip.setAttribute("aria-hidden", "false");
+
+    const pad = 14;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const tw = tip.offsetWidth || 320;
+    const th = tip.offsetHeight || 120;
+
+    let left = x + 16;
+    let top = y + 16;
+    if (left + tw + pad > vw) left = x - tw - 16;
+    if (top + th + pad > vh) top = y - th - 16;
+    if (left < pad) left = pad;
+    if (top < pad) top = pad;
+
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+}
+
+function wireMentorCursorMode() {
+    document.addEventListener("mousemove", (e) => {
+        if (!mentorCursorMode) return;
+        const html = getMentorContextText(e.target);
+        if (!html) {
+            hideMentorCursorTip();
+            return;
+        }
+        showMentorCursorTip(html, e.clientX, e.clientY);
+    });
+
+    document.addEventListener("scroll", () => {
+        if (!mentorCursorMode) hideMentorCursorTip();
+    }, true);
+}
+
 function wireMentorHotkeys() {
     const closeBtn = document.getElementById("mentorCloseBtn");
     const overlay = document.getElementById("mentorOverlay");
@@ -642,11 +769,17 @@ function wireMentorHotkeys() {
         const isToggle = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
         if (isToggle) {
             e.preventDefault();
-            if (mentorOpen) closeMentor();
-            else openMentor();
+            mentorCursorMode = !mentorCursorMode;
+            if (!mentorCursorMode) hideMentorCursorTip();
+            setMentorBadge();
         }
         if (e.key === "Escape" && mentorOpen) {
             closeMentor();
+        }
+        if (e.key === "Escape" && mentorCursorMode) {
+            mentorCursorMode = false;
+            hideMentorCursorTip();
+            setMentorBadge();
         }
     });
 }
@@ -669,6 +802,8 @@ async function initialize() {
     initChart();
     wireEvents();
     wireMentorHotkeys();
+    wireMentorCursorMode();
+    setMentorBadge();
 
     await loadInitialMarket();
     await refreshSymbolData();
