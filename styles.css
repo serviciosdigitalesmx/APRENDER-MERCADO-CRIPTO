@@ -191,6 +191,25 @@ body {
     color: #f0b90b;
 }
 
+.reference-strip {
+    margin-top: 8px;
+    background: #2b3139;
+    border-radius: 4px;
+    padding: 8px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+
+.ref-item {
+    color: #adb5bd;
+}
+
+.ref-item strong {
+    color: #eaecef;
+}
+
 #chartContainer {
     flex: 1;
     min-height: 420px;

@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Binance Clone - Simulador Profesional</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="./styles.css?v=20260312-6">
+    <link rel="stylesheet" href="./styles.css?v=20260312-7">
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="./app.js?v=20260312-6" defer></script>
+    <script src="./app.js?v=20260312-7" defer></script>
 </head>
 <body>
     <div class="ticker-bar" id="tickerBar"></div>
@@ -44,13 +44,19 @@
                 <button class="timeframe-btn" data-timeframe="1d">1D</button>
             </div>
 
-                <div class="ma-indicators">
-                    <div class="ma-item"><span class="ma-label">MA(7):</span><span class="ma-value" id="ma7">-</span></div>
-                    <div class="ma-item"><span class="ma-label">MA(25):</span><span class="ma-value" id="ma25">-</span></div>
-                    <div class="ma-item"><span class="ma-label">MA(99):</span><span class="ma-value" id="ma99">-</span></div>
-                    <div class="ma-item"><span class="ma-label">USDT/MXN:</span><span class="ma-value" id="usdtMxn">-</span></div>
-                    <div class="ma-item"><span class="ma-label">Mentor:</span><span class="ma-value">Ctrl/⌘ + K</span></div>
-                </div>
+            <div class="ma-indicators">
+                <div class="ma-item"><span class="ma-label">MA(7):</span><span class="ma-value" id="ma7">-</span></div>
+                <div class="ma-item"><span class="ma-label">MA(25):</span><span class="ma-value" id="ma25">-</span></div>
+                <div class="ma-item"><span class="ma-label">MA(99):</span><span class="ma-value" id="ma99">-</span></div>
+                <div class="ma-item"><span class="ma-label">USDT/MXN:</span><span class="ma-value" id="usdtMxn">-</span></div>
+                <div class="ma-item"><span class="ma-label">Mentor:</span><span class="ma-value">Ctrl/⌘ + K</span></div>
+            </div>
+
+            <div class="reference-strip">
+                <span class="ref-item"><strong id="refSymbolUsdtLabel">BNBUSDT</strong>: <span id="refSymbolUsdt">-</span></span>
+                <span class="ref-item"><strong>USDTMXN</strong>: <span id="refUsdtMxn">-</span></span>
+                <span class="ref-item"><strong id="refSymbolMxnLabel">BNBMXN calc</strong>: <span id="refSymbolMxn">-</span></span>
+            </div>
 
             <div id="chartContainer"></div>
         </div>

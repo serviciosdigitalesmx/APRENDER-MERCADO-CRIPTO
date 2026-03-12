@@ -157,6 +157,11 @@ function renderHeaderPrice() {
     if (!t) {
         priceEl.textContent = "-";
         changeEl.textContent = "-";
+        document.getElementById("refSymbolUsdtLabel").textContent = appState.selectedSymbol;
+        document.getElementById("refSymbolUsdt").textContent = "-";
+        document.getElementById("refUsdtMxn").textContent = appState.usdtMxn.toFixed(4);
+        document.getElementById("refSymbolMxnLabel").textContent = `${appState.selectedSymbol.replace("USDT", "MXN")} calc`;
+        document.getElementById("refSymbolMxn").textContent = "-";
         return;
     }
 
@@ -171,6 +176,12 @@ function renderHeaderPrice() {
     document.getElementById("priceInput").value = lastPrice ? usdtToMxn(lastPrice).toFixed(2) : "";
     document.getElementById("symbolName").textContent = appState.selectedSymbol;
     document.getElementById("usdtMxn").textContent = appState.usdtMxn.toFixed(4);
+
+    document.getElementById("refSymbolUsdtLabel").textContent = appState.selectedSymbol;
+    document.getElementById("refSymbolUsdt").textContent = formatUsdt(lastPrice, 4);
+    document.getElementById("refUsdtMxn").textContent = appState.usdtMxn.toFixed(4);
+    document.getElementById("refSymbolMxnLabel").textContent = `${appState.selectedSymbol.replace("USDT", "MXN")} calc`;
+    document.getElementById("refSymbolMxn").textContent = formatMxn(usdtToMxn(lastPrice));
 }
 
 function parseKlines(raw) {
