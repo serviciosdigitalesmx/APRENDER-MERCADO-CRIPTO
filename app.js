@@ -117,6 +117,10 @@ function renderDiagnostics() {
         .join("");
 }
 
+function canUseCandleSeries() {
+    return Boolean(candleSeries && typeof candleSeries.update === "function" && typeof candleSeries.setData === "function");
+}
+
 function formatMxn(value) {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 2 }).format(value || 0);
 }
@@ -244,7 +248,9 @@ function startCandlePolling() {
                 const last = candles[candles.length - 1];
                 if (last && last.time === candle.time) candles[candles.length - 1] = candle;
                 else candles.push(candle);
-                candleSeries.update(candle);
+                if (canUseCandleSeries()) {
+                    candleSeries.update(candle);
+                }
             });
 
             if (candles.length > 350) {
@@ -314,8 +320,15 @@ async function loadCandles(symbol, interval) {
         close: Number(entry[4]),
         volume: Number(entry[5])
     }));
-    candleSeries.setData(candles);
-    chartApi.timeScale().fitContent();
+    if (canUseCandleSeries()) {
+        candleSeries.setData(candles);
+    } else {
+        pushDiagnostic("Serie de velas no lista aun; esperando inicializacion de grafico.", "warn");
+        return;
+    }
+    if (chartApi?.timeScale) {
+        chartApi.timeScale().fitContent();
+    }
     updateCoachPanel();
 }
 
@@ -323,6 +336,11 @@ function connectKlineSocket() {
     if (klineSocket) {
         klineSocket.close();
         klineSocket = null;
+    }
+
+    if (!canUseCandleSeries()) {
+        pushDiagnostic("Grafico aun no listo para WebSocket de velas; se omite conexion temporal.", "warn");
+        return;
     }
 
     const stream = `${state.selectedSymbol.toLowerCase()}@kline_${state.selectedInterval}`;
@@ -354,6 +372,9 @@ function connectKlineSocket() {
             if (candles.length > 350) candles.shift();
         }
 
+        if (!canUseCandleSeries()) {
+            return;
+        }
         candleSeries.update(candle);
         updateCoachPanel();
     };
@@ -400,13 +421,14 @@ function buildChart() {
     // Compatibilidad: lightweight-charts v4 (addCandlestickSeries) y v5 (addSeries).
     if (typeof chartApi.addCandlestickSeries === "function") {
         candleSeries = chartApi.addCandlestickSeries(seriesOptions);
-    } else if (
-        typeof chartApi.addSeries === "function" &&
-        typeof LightweightCharts.CandlestickSeries === "function"
-    ) {
+    } else if (typeof chartApi.addSeries === "function" && LightweightCharts.CandlestickSeries) {
         candleSeries = chartApi.addSeries(LightweightCharts.CandlestickSeries, seriesOptions);
     } else {
         throw new Error("API de lightweight-charts no compatible para velas.");
+    }
+
+    if (!canUseCandleSeries()) {
+        throw new Error("No se pudo inicializar la serie de velas.");
     }
 
     const onResize = () => {
