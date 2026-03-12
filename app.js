@@ -326,6 +326,7 @@ function connectKlineSocket() {
         market.set(appState.selectedSymbol, t);
         renderHeaderPrice();
         renderPositions();
+        renderTrainingPanel();
 
         if (candles.length % 3 === 0) {
             renderChart();
@@ -400,6 +401,151 @@ function renderBalanceAndTotal() {
     const amount = Number(document.getElementById("amountInput").value || 0);
     const totalMxn = priceMxn * amount;
     document.getElementById("totalAmount").textContent = `${formatMxn(totalMxn)}`;
+
+    const plan = evaluateTradePlan();
+    const riskEl = document.getElementById("riskAmount");
+    const rrEl = document.getElementById("rrValue");
+    riskEl.textContent = `${formatMxn(plan.riskMxn)} (${plan.riskPct.toFixed(2)}%)`;
+    rrEl.textContent = plan.rr > 0 ? plan.rr.toFixed(2) : "-";
+    setTradeHint(plan.message, plan.ok ? "ok" : "error");
+}
+
+function setTradeHint(message, type = "") {
+    const hint = document.getElementById("tradeHint");
+    if (!hint) return;
+    hint.textContent = message;
+    hint.className = `trade-hint ${type}`.trim();
+}
+
+function getTradeInputs() {
+    return {
+        entryMxn: Number(document.getElementById("priceInput").value || 0),
+        qty: Number(document.getElementById("amountInput").value || 0),
+        stopMxn: Number(document.getElementById("stopInput").value || 0),
+        takeMxn: Number(document.getElementById("takeInput").value || 0)
+    };
+}
+
+function detectPlanDirection(entryMxn, stopMxn, takeMxn) {
+    if (stopMxn < entryMxn && takeMxn > entryMxn) return "LONG";
+    if (stopMxn > entryMxn && takeMxn < entryMxn) return "SHORT";
+    return "INVALID";
+}
+
+function evaluateTradePlan() {
+    const { entryMxn, qty, stopMxn, takeMxn } = getTradeInputs();
+    if (!entryMxn || !qty || !stopMxn || !takeMxn) {
+        return { ok: false, riskMxn: 0, riskPct: 0, rr: 0, direction: "INVALID", message: "Completa entrada, cantidad, stop y take." };
+    }
+
+    const direction = detectPlanDirection(entryMxn, stopMxn, takeMxn);
+    if (direction === "INVALID") {
+        return { ok: false, riskMxn: 0, riskPct: 0, rr: 0, direction, message: "Para LONG usa stop<entrada<take. Para SHORT usa take<entrada<stop." };
+    }
+
+    const riskPerUnit = Math.abs(entryMxn - stopMxn);
+    const rewardPerUnit = Math.abs(takeMxn - entryMxn);
+    const riskMxn = riskPerUnit * qty;
+    const rewardMxn = rewardPerUnit * qty;
+    const riskPct = appState.balanceMxn > 0 ? (riskMxn / appState.balanceMxn) * 100 : 0;
+    const rr = riskMxn > 0 ? rewardMxn / riskMxn : 0;
+
+    if (riskPct > 2) {
+        return { ok: false, riskMxn, riskPct, rr, direction, message: "Riesgo alto: baja tamaño o acerca stop (objetivo <= 2% del saldo)." };
+    }
+    if (rr < 1.3) {
+        return { ok: false, riskMxn, riskPct, rr, direction, message: "Relación riesgo/beneficio baja. Busca al menos 1.3R." };
+    }
+
+    return { ok: true, riskMxn, riskPct, rr, direction, message: `Plan válido (${direction}) • Riesgo controlado.` };
+}
+
+function validatePlanForOrder(orderSide) {
+    const plan = evaluateTradePlan();
+    if (!plan.ok) return plan;
+
+    const requiredDirection = orderSide === "BUY" || orderSide === "LONG" ? "LONG" : "SHORT";
+    if (plan.direction !== requiredDirection) {
+        return { ...plan, ok: false, message: `Tu plan actual es ${plan.direction}. Esta orden requiere ${requiredDirection}.` };
+    }
+
+    return plan;
+}
+
+function computeTrainingSignal() {
+    if (candles.length < 120) {
+        return {
+            state: "wait",
+            confidence: "Baja",
+            action: "Esperar",
+            note: "Aún no hay suficientes velas para una lectura sólida."
+        };
+    }
+
+    const close = candles[candles.length - 1].close;
+    const ma7 = calcMA(candles, 7).at(-1)?.value || close;
+    const ma25 = calcMA(candles, 25).at(-1)?.value || close;
+    const ma99 = calcMA(candles, 99).at(-1)?.value || close;
+    const ranges = candles.slice(-20).map((c) => (c.high - c.low) / c.close);
+    const avgVolatility = ranges.reduce((s, x) => s + x, 0) / ranges.length;
+    const pullbackPct = Math.abs(close - ma7) / close;
+
+    const bullish = close > ma25 && ma7 > ma25 && close > ma99;
+    const bearish = close < ma25 && ma7 < ma25 && close < ma99;
+
+    if (avgVolatility > 0.03) {
+        return {
+            state: "avoid",
+            confidence: "Media",
+            action: "No tocar",
+            note: "Volatilidad alta: mercado agresivo para práctica inicial."
+        };
+    }
+
+    if (bullish && pullbackPct < 0.006) {
+        return {
+            state: "enter",
+            confidence: "Media-Alta",
+            action: "Entrar (LONG)",
+            note: "Tendencia alcista con pullback corto a MA(7)."
+        };
+    }
+
+    if (bearish && pullbackPct < 0.006) {
+        return {
+            state: "enter",
+            confidence: "Media",
+            action: "Entrar (SHORT)",
+            note: "Tendencia bajista con rebote débil cerca de MA(7)."
+        };
+    }
+
+    return {
+        state: "wait",
+        confidence: "Media",
+        action: "Esperar",
+        note: "No hay setup limpio. Mejor paciencia que forzar entrada."
+    };
+}
+
+function renderTrainingPanel() {
+    const box = document.getElementById("trainingRows");
+    if (!box) return;
+
+    const signal = computeTrainingSignal();
+    const badgeClass = signal.state === "enter" ? "training-enter" : signal.state === "avoid" ? "training-avoid" : "training-wait";
+
+    box.innerHTML = `
+        <div class="position-item">
+            <span>Setup actual</span>
+            <span><span class="training-badge ${badgeClass}">${signal.state === "enter" ? "ENTRAR" : signal.state === "avoid" ? "NO TOCAR" : "ESPERAR"}</span></span>
+            <span>${signal.confidence}</span>
+            <span>${signal.action}</span>
+        </div>
+        <div class="position-item">
+            <span style="grid-column: 1 / span 4; color:#cbd5df;">${signal.note}</span>
+        </div>
+    `;
 }
 
 function renderPositions() {
@@ -482,6 +628,7 @@ function startTickerPolling() {
             renderTickerBar();
             renderHeaderPrice();
             renderPositions();
+            renderTrainingPanel();
         } catch (_err) {
             // keep UI running
         }
@@ -506,6 +653,8 @@ function wireEvents() {
 
     document.getElementById("priceInput").addEventListener("input", renderBalanceAndTotal);
     document.getElementById("amountInput").addEventListener("input", renderBalanceAndTotal);
+    document.getElementById("stopInput").addEventListener("input", renderBalanceAndTotal);
+    document.getElementById("takeInput").addEventListener("input", renderBalanceAndTotal);
 
     document.getElementById("buyBTCBtn").addEventListener("click", () => executeSpot("BUY"));
     document.getElementById("sellBTCBtn").addEventListener("click", () => executeSpot("SELL"));
@@ -514,6 +663,12 @@ function wireEvents() {
 }
 
 function executeSpot(side) {
+    const planCheck = validatePlanForOrder(side);
+    if (!planCheck.ok) {
+        setTradeHint(planCheck.message, "error");
+        return;
+    }
+
     const symbol = appState.selectedSymbol;
     const priceMxn = Number(document.getElementById("priceInput").value || 0);
     const price = priceMxn / appState.usdtMxn;
@@ -542,9 +697,17 @@ function executeSpot(side) {
     saveState();
     renderBalanceAndTotal();
     renderPositions();
+    renderTrainingPanel();
+    setTradeHint(`Orden ${side} ejecutada con plan válido.`, "ok");
 }
 
 function executePerp(side) {
+    const planCheck = validatePlanForOrder(side);
+    if (!planCheck.ok) {
+        setTradeHint(planCheck.message, "error");
+        return;
+    }
+
     const symbol = appState.selectedSymbol;
     const priceMxn = Number(document.getElementById("priceInput").value || 0);
     const price = priceMxn / appState.usdtMxn;
@@ -569,6 +732,8 @@ function executePerp(side) {
     saveState();
     renderBalanceAndTotal();
     renderPositions();
+    renderTrainingPanel();
+    setTradeHint(`Orden ${side} ejecutada con plan válido.`, "ok");
 }
 
 function buildMentorInsights() {
@@ -789,6 +954,8 @@ async function refreshSymbolData() {
     await Promise.allSettled([loadCandles(), loadDepthSnapshot()]);
     connectKlineSocket();
     connectDepthSocket();
+    renderTrainingPanel();
+    renderBalanceAndTotal();
 }
 
 async function initialize() {
@@ -810,6 +977,7 @@ async function initialize() {
     startTickerPolling();
     renderBalanceAndTotal();
     renderPositions();
+    renderTrainingPanel();
 }
 
 window.addEventListener("DOMContentLoaded", () => {

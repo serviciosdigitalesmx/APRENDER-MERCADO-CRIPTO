@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Binance Clone - Simulador Profesional</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="./styles.css?v=20260312-8">
+    <link rel="stylesheet" href="./styles.css?v=20260312-9">
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="./app.js?v=20260312-8" defer></script>
+    <script src="./app.js?v=20260312-9" defer></script>
 </head>
 <body>
     <div class="ticker-bar" id="tickerBar"></div>
@@ -94,11 +94,22 @@
 
                 <input type="number" class="trade-input" id="priceInput" placeholder="Precio MXN">
                 <input type="number" class="trade-input" id="amountInput" placeholder="Cantidad">
+                <input type="number" class="trade-input" id="stopInput" placeholder="Stop Loss (MXN)">
+                <input type="number" class="trade-input" id="takeInput" placeholder="Take Profit (MXN)">
 
                 <div class="balance-info">
                     <span>Total:</span>
                     <span id="totalAmount">$0 MXN</span>
                 </div>
+                <div class="balance-info">
+                    <span>Riesgo plan:</span>
+                    <span id="riskAmount">$0 MXN (0.00%)</span>
+                </div>
+                <div class="balance-info">
+                    <span>R:R:</span>
+                    <span id="rrValue">-</span>
+                </div>
+                <div class="trade-hint" id="tradeHint">Define entrada, stop y take para habilitar un plan sano.</div>
 
                 <div class="button-group">
                     <button class="btn-buy" id="buyLongBtn">Comprar/Long</button>
@@ -119,6 +130,16 @@
                     <span>PnL</span>
                 </div>
                 <div id="positions"></div>
+            </div>
+
+            <div class="positions-panel">
+                <div class="positions-header">
+                    <span>Entrenamiento</span>
+                    <span>Estado</span>
+                    <span>Confianza</span>
+                    <span>Acción</span>
+                </div>
+                <div id="trainingRows"></div>
             </div>
         </div>
     </div>

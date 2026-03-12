@@ -333,6 +333,24 @@ body {
     color: #848e9c;
 }
 
+.trade-hint {
+    background: #2b3139;
+    border-left: 3px solid #f0b90b;
+    border-radius: 4px;
+    color: #d6dbe1;
+    padding: 8px;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.trade-hint.error {
+    border-left-color: #f6465d;
+}
+
+.trade-hint.ok {
+    border-left-color: #0ecb81;
+}
+
 .button-group {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -383,6 +401,29 @@ body {
 .position-empty {
     color: #848e9c;
     font-size: 13px;
+}
+
+.training-badge {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.training-enter {
+    background: rgba(14, 203, 129, 0.2);
+    color: #0ecb81;
+}
+
+.training-wait {
+    background: rgba(240, 185, 11, 0.2);
+    color: #f0b90b;
+}
+
+.training-avoid {
+    background: rgba(246, 70, 93, 0.2);
+    color: #f6465d;
 }
 
 .mentor-overlay {
