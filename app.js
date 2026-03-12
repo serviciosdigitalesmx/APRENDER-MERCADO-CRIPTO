@@ -47,6 +47,7 @@ let tickerPoll = null;
 let tickerSocket = null;
 let klineSocket = null;
 let depthSocket = null;
+let mentorOpen = false;
 
 function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
@@ -134,7 +135,7 @@ function renderTickerBar() {
     const tickerBar = document.getElementById("tickerBar");
     tickerBar.innerHTML = TOP_SYMBOLS.map((symbol) => {
         const t = market.get(symbol);
-        const price = t ? formatUsdt(t.lastPrice, 4) : "-";
+        const price = t ? formatMxn(usdtToMxn(t.lastPrice)) : "-";
         const change = t ? t.changePct : 0;
         return `
             <div class="ticker-item" data-symbol="${symbol}">
@@ -161,14 +162,13 @@ function renderHeaderPrice() {
 
     const lastPrice = Number(t.lastPrice || 0);
     const changePct = Number(t.changePct || 0);
-    const usdt = formatUsdt(lastPrice, 2);
     const mxn = formatMxn(usdtToMxn(lastPrice));
-    priceEl.textContent = `${usdt} / ${mxn}`;
+    priceEl.textContent = `${mxn}`;
 
     changeEl.textContent = `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`;
     changeEl.className = `price-change ${changePct >= 0 ? "positive" : "negative"}`;
 
-    document.getElementById("priceInput").value = lastPrice ? lastPrice.toFixed(4) : "";
+    document.getElementById("priceInput").value = lastPrice ? usdtToMxn(lastPrice).toFixed(2) : "";
     document.getElementById("symbolName").textContent = appState.selectedSymbol;
     document.getElementById("usdtMxn").textContent = appState.usdtMxn.toFixed(4);
 }
@@ -255,9 +255,9 @@ function renderChart() {
     const ma25Last = ma25[ma25.length - 1]?.value;
     const ma99Last = ma99[ma99.length - 1]?.value;
 
-    document.getElementById("ma7").textContent = ma7Last ? formatUsdt(ma7Last, 2) : "-";
-    document.getElementById("ma25").textContent = ma25Last ? formatUsdt(ma25Last, 2) : "-";
-    document.getElementById("ma99").textContent = ma99Last ? formatUsdt(ma99Last, 2) : "-";
+    document.getElementById("ma7").textContent = ma7Last ? formatMxn(usdtToMxn(ma7Last)) : "-";
+    document.getElementById("ma25").textContent = ma25Last ? formatMxn(usdtToMxn(ma25Last)) : "-";
+    document.getElementById("ma99").textContent = ma99Last ? formatMxn(usdtToMxn(ma99Last)) : "-";
 }
 
 async function loadCandles() {
@@ -350,17 +350,17 @@ function renderOrderBook() {
 
     const asksHtml = asks.map((ask) => `
         <div class="order-row asks">
-            <span class="price-cell">${formatUsdt(ask.price, 4)}</span>
+            <span class="price-cell">${formatMxn(usdtToMxn(ask.price))}</span>
             <span class="amount-cell">${formatUsdt(ask.qty, 4)}</span>
-            <span class="total-cell">${formatUsdt(ask.price * ask.qty, 2)}</span>
+            <span class="total-cell">${formatMxn(usdtToMxn(ask.price * ask.qty))}</span>
         </div>
     `).join("");
 
     const bidsHtml = bids.map((bid) => `
         <div class="order-row bids">
-            <span class="price-cell">${formatUsdt(bid.price, 4)}</span>
+            <span class="price-cell">${formatMxn(usdtToMxn(bid.price))}</span>
             <span class="amount-cell">${formatUsdt(bid.qty, 4)}</span>
-            <span class="total-cell">${formatUsdt(bid.price * bid.qty, 2)}</span>
+            <span class="total-cell">${formatMxn(usdtToMxn(bid.price * bid.qty))}</span>
         </div>
     `).join("");
 
@@ -370,7 +370,7 @@ function renderOrderBook() {
     if (asks.length && bids.length) {
         const spread = asks[0].price - bids[0].price;
         const spreadPct = (spread / asks[0].price) * 100;
-        document.getElementById("spread").textContent = `Spread: ${formatUsdt(spread, 4)} (${spreadPct.toFixed(3)}%)`;
+        document.getElementById("spread").textContent = `Spread: ${formatMxn(usdtToMxn(spread))} (${spreadPct.toFixed(3)}%)`;
 
         const bidQty = bids.reduce((sum, x) => sum + x.qty, 0);
         const askQty = asks.reduce((sum, x) => sum + x.qty, 0);
@@ -384,11 +384,10 @@ function renderBalanceAndTotal() {
     const balanceEl = document.getElementById("balance");
     balanceEl.textContent = `${formatMxn(appState.balanceMxn)}`;
 
-    const price = Number(document.getElementById("priceInput").value || 0);
+    const priceMxn = Number(document.getElementById("priceInput").value || 0);
     const amount = Number(document.getElementById("amountInput").value || 0);
-    const totalUsdt = price * amount;
-    const totalMxn = usdtToMxn(totalUsdt);
-    document.getElementById("totalAmount").textContent = `${formatUsdt(totalUsdt, 4)} USDT / ${formatMxn(totalMxn)}`;
+    const totalMxn = priceMxn * amount;
+    document.getElementById("totalAmount").textContent = `${formatMxn(totalMxn)}`;
 }
 
 function renderPositions() {
@@ -428,8 +427,8 @@ function renderPositions() {
         <div class="position-item">
             <span>${row.label}</span>
             <span>${formatUsdt(row.qty, 4)}</span>
-            <span>${formatUsdt(row.entry, 4)}</span>
-            <span class="${row.pnl >= 0 ? "pnl-positive" : "pnl-negative"}">${formatUsdt(row.pnl, 4)} USDT</span>
+            <span>${formatMxn(usdtToMxn(row.entry))}</span>
+            <span class="${row.pnl >= 0 ? "pnl-positive" : "pnl-negative"}">${formatMxn(usdtToMxn(row.pnl))}</span>
         </div>
     `).join("");
 }
@@ -504,7 +503,8 @@ function wireEvents() {
 
 function executeSpot(side) {
     const symbol = appState.selectedSymbol;
-    const price = Number(document.getElementById("priceInput").value || 0);
+    const priceMxn = Number(document.getElementById("priceInput").value || 0);
+    const price = priceMxn / appState.usdtMxn;
     const qty = Number(document.getElementById("amountInput").value || 0);
     if (!price || !qty) return;
 
@@ -534,7 +534,8 @@ function executeSpot(side) {
 
 function executePerp(side) {
     const symbol = appState.selectedSymbol;
-    const price = Number(document.getElementById("priceInput").value || 0);
+    const priceMxn = Number(document.getElementById("priceInput").value || 0);
+    const price = priceMxn / appState.usdtMxn;
     const qty = Number(document.getElementById("amountInput").value || 0);
     if (!price || !qty) return;
 
@@ -558,6 +559,87 @@ function executePerp(side) {
     renderPositions();
 }
 
+function buildMentorInsights() {
+    const symbol = appState.selectedSymbol;
+    const ticker = market.get(symbol);
+    const lines = [];
+    if (!ticker || candles.length < 30) {
+        lines.push("Aun no hay suficientes datos para una lectura completa. Espera unos segundos.");
+        return lines;
+    }
+
+    const close = candles[candles.length - 1].close;
+    const prev = candles[candles.length - 2]?.close || close;
+    const ma7 = calcMA(candles, 7).at(-1)?.value;
+    const ma25 = calcMA(candles, 25).at(-1)?.value;
+    const ma99 = calcMA(candles, 99).at(-1)?.value;
+    const move = ((close - prev) / prev) * 100;
+
+    lines.push(`${symbol}: ${formatMxn(usdtToMxn(close))} (${ticker.changePct >= 0 ? "+" : ""}${ticker.changePct.toFixed(2)}% 24h).`);
+    lines.push(`Movimiento de la ultima vela: ${move >= 0 ? "+" : ""}${move.toFixed(2)}%.`);
+
+    if (ma7 && ma25) {
+        lines.push(ma7 > ma25
+            ? "Tendencia corta alcista: MA(7) arriba de MA(25)."
+            : "Tendencia corta bajista: MA(7) debajo de MA(25).");
+    }
+    if (ma99) {
+        lines.push(close > ma99
+            ? "Precio por arriba de MA(99): sesgo estructural alcista."
+            : "Precio por debajo de MA(99): sesgo estructural defensivo.");
+    }
+
+    const spot = appState.spotPositions[symbol];
+    if (spot && spot.qty > 0) {
+        const pnl = (close - spot.entry) * spot.qty;
+        lines.push(`Tu spot en ${symbol}: ${spot.qty.toFixed(4)} con PnL no realizado de ${formatMxn(usdtToMxn(pnl))}.`);
+    } else {
+        lines.push("No tienes spot abierto en este par. Puedes practicar con entradas pequeñas.");
+    }
+
+    lines.push(`Riesgo sugerido: no arriesgues mas de 1% a 2% de tu saldo por operación.`);
+    return lines;
+}
+
+function openMentor() {
+    const overlay = document.getElementById("mentorOverlay");
+    const list = document.getElementById("mentorList");
+    if (!overlay || !list) return;
+    list.innerHTML = buildMentorInsights().map((line) => `<li>${line}</li>`).join("");
+    overlay.classList.add("open");
+    overlay.setAttribute("aria-hidden", "false");
+    mentorOpen = true;
+}
+
+function closeMentor() {
+    const overlay = document.getElementById("mentorOverlay");
+    if (!overlay) return;
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+    mentorOpen = false;
+}
+
+function wireMentorHotkeys() {
+    const closeBtn = document.getElementById("mentorCloseBtn");
+    const overlay = document.getElementById("mentorOverlay");
+    closeBtn?.addEventListener("click", closeMentor);
+    overlay?.addEventListener("click", (e) => {
+        if (e.target === overlay) closeMentor();
+    });
+
+    document.addEventListener("keydown", (e) => {
+        const isToggle = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
+        if (isToggle) {
+            e.preventDefault();
+            if (mentorOpen) closeMentor();
+            else openMentor();
+        }
+        if (e.key === "Escape" && mentorOpen) {
+            closeMentor();
+        }
+    });
+}
+
 async function refreshSymbolData() {
     renderHeaderPrice();
     await Promise.allSettled([loadCandles(), loadDepthSnapshot()]);
@@ -575,6 +657,7 @@ async function initialize() {
 
     initChart();
     wireEvents();
+    wireMentorHotkeys();
 
     await loadInitialMarket();
     await refreshSymbolData();

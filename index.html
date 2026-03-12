@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Binance Clone - Simulador Profesional</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="./styles.css?v=20260312-5">
+    <link rel="stylesheet" href="./styles.css?v=20260312-6">
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="./app.js?v=20260312-5" defer></script>
+    <script src="./app.js?v=20260312-6" defer></script>
 </head>
 <body>
     <div class="ticker-bar" id="tickerBar"></div>
@@ -44,12 +44,13 @@
                 <button class="timeframe-btn" data-timeframe="1d">1D</button>
             </div>
 
-            <div class="ma-indicators">
-                <div class="ma-item"><span class="ma-label">MA(7):</span><span class="ma-value" id="ma7">-</span></div>
-                <div class="ma-item"><span class="ma-label">MA(25):</span><span class="ma-value" id="ma25">-</span></div>
-                <div class="ma-item"><span class="ma-label">MA(99):</span><span class="ma-value" id="ma99">-</span></div>
-                <div class="ma-item"><span class="ma-label">USDT/MXN:</span><span class="ma-value" id="usdtMxn">-</span></div>
-            </div>
+                <div class="ma-indicators">
+                    <div class="ma-item"><span class="ma-label">MA(7):</span><span class="ma-value" id="ma7">-</span></div>
+                    <div class="ma-item"><span class="ma-label">MA(25):</span><span class="ma-value" id="ma25">-</span></div>
+                    <div class="ma-item"><span class="ma-label">MA(99):</span><span class="ma-value" id="ma99">-</span></div>
+                    <div class="ma-item"><span class="ma-label">USDT/MXN:</span><span class="ma-value" id="usdtMxn">-</span></div>
+                    <div class="ma-item"><span class="ma-label">Mentor:</span><span class="ma-value">Ctrl/⌘ + K</span></div>
+                </div>
 
             <div id="chartContainer"></div>
         </div>
@@ -57,9 +58,9 @@
         <div class="right-panel">
             <div class="order-book">
                 <div class="order-book-header">
-                    <span>Precio (USDT)</span>
+                    <span>Precio (MXN)</span>
                     <span>Cantidad</span>
-                    <span>Total</span>
+                    <span>Total (MXN)</span>
                 </div>
 
                 <div class="order-book-content" id="orderBookAsks"></div>
@@ -85,12 +86,12 @@
                     <span id="balance">$0 MXN</span>
                 </div>
 
-                <input type="number" class="trade-input" id="priceInput" placeholder="Precio USDT">
+                <input type="number" class="trade-input" id="priceInput" placeholder="Precio MXN">
                 <input type="number" class="trade-input" id="amountInput" placeholder="Cantidad">
 
                 <div class="balance-info">
                     <span>Total:</span>
-                    <span id="totalAmount">0.00 USDT / $0 MXN</span>
+                    <span id="totalAmount">$0 MXN</span>
                 </div>
 
                 <div class="button-group">
@@ -113,6 +114,18 @@
                 </div>
                 <div id="positions"></div>
             </div>
+        </div>
+    </div>
+
+    <div class="mentor-overlay" id="mentorOverlay" aria-hidden="true">
+        <div class="mentor-modal">
+            <div class="mentor-header">
+                <h3>Mentor de Trading</h3>
+                <button id="mentorCloseBtn" class="mentor-close" aria-label="Cerrar mentor">×</button>
+            </div>
+            <p class="mentor-subtitle">Atajo: <strong>Ctrl/⌘ + K</strong></p>
+            <ul id="mentorList" class="mentor-list"></ul>
+            <p class="mentor-disclaimer">Esto es educativo y no es consejo financiero.</p>
         </div>
     </div>
 </body>

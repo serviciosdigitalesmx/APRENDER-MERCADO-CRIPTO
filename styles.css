@@ -366,6 +366,75 @@ body {
     font-size: 13px;
 }
 
+.mentor-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.66);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 12px;
+}
+
+.mentor-overlay.open {
+    display: flex;
+}
+
+.mentor-modal {
+    width: min(680px, 100%);
+    max-height: 85vh;
+    overflow: auto;
+    background: #1e2329;
+    border: 1px solid #2b3139;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.mentor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.mentor-close {
+    border: none;
+    background: #2b3139;
+    color: #eaecef;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 20px;
+}
+
+.mentor-subtitle {
+    color: #848e9c;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.mentor-list {
+    list-style: none;
+    display: grid;
+    gap: 8px;
+}
+
+.mentor-list li {
+    background: #2b3139;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+.mentor-disclaimer {
+    margin-top: 10px;
+    color: #f0b90b;
+    font-size: 12px;
+}
+
 @media (max-width: 1200px) {
     .main-grid {
         grid-template-columns: 1fr;
