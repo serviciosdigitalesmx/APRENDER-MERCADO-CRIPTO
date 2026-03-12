@@ -354,6 +354,38 @@ th {
     text-align: center;
 }
 
+.diagnostics-panel {
+    border: 1px solid #e2e8f0;
+}
+
+.diagnostics-list {
+    list-style: none;
+    display: grid;
+    gap: 8px;
+}
+
+.diagnostics-list li {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #334155;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.86rem;
+    color: #334155;
+}
+
+.diagnostics-list li.error {
+    border-left-color: #b91c1c;
+    color: #7f1d1d;
+    background: #fef2f2;
+}
+
+.diagnostics-list li.warn {
+    border-left-color: #b45309;
+    color: #7c2d12;
+    background: #fffbeb;
+}
+
 .notification {
     position: fixed;
     top: 16px;

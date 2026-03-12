@@ -43,6 +43,7 @@ let activeRestBase = BINANCE_REST_BASES[0];
 let activeWsBase = BINANCE_WS_BASES[0];
 let tickerPollTimer = null;
 let candlePollTimer = null;
+let diagnostics = [];
 
 function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -97,6 +98,25 @@ function setConnectionStatus(text, kind = "loading") {
     if (kind === "error") badge.classList.add("error");
 }
 
+function pushDiagnostic(message, level = "info") {
+    const now = new Date().toLocaleTimeString("es-MX");
+    diagnostics.unshift({ message, level, time: now });
+    diagnostics = diagnostics.slice(0, 12);
+    renderDiagnostics();
+}
+
+function renderDiagnostics() {
+    const list = document.getElementById("diagnosticsList");
+    if (!list) return;
+    if (!diagnostics.length) {
+        list.innerHTML = "<li>Sin eventos. Conexion inicializando...</li>";
+        return;
+    }
+    list.innerHTML = diagnostics
+        .map((entry) => `<li class="${entry.level === "error" ? "error" : entry.level === "warn" ? "warn" : ""}">[${entry.time}] ${entry.message}</li>`)
+        .join("");
+}
+
 function formatMxn(value) {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 2 }).format(value || 0);
 }
@@ -120,12 +140,20 @@ function getAsset(symbol) {
 async function fetchJson(url, timeoutMs = 9000) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    } catch (error) {
+        clearTimeout(timeout);
+        if (error.name === "AbortError") {
+            throw new Error("Timeout de red");
+        }
+        throw error;
     }
-    return response.json();
 }
 
 async function fetchBinance(path) {
@@ -235,6 +263,7 @@ function connectTickerSocket() {
 
     tickerSocket.onopen = () => {
         setConnectionStatus("Conectado a Binance (WS)", "connected");
+        pushDiagnostic("WebSocket de precios conectado.");
         clearTimeout(reconnectTickerTimer);
     };
 
@@ -259,10 +288,12 @@ function connectTickerSocket() {
 
     tickerSocket.onerror = () => {
         setConnectionStatus("WS inestable, usando REST", "connected");
+        pushDiagnostic("WebSocket de precios fallo; seguimos con polling REST.", "warn");
     };
 
     tickerSocket.onclose = () => {
         setConnectionStatus("Reconectando WS, REST activo", "connected");
+        pushDiagnostic("WebSocket de precios cerrado; reintentando.", "warn");
         reconnectTickerTimer = setTimeout(connectTickerSocket, 2500);
     };
 }
@@ -328,6 +359,7 @@ function connectKlineSocket() {
     };
 
     klineSocket.onclose = () => {
+        pushDiagnostic("WebSocket de velas cerrado; reintentando.", "warn");
         reconnectKlineTimer = setTimeout(async () => {
             await loadCandles(state.selectedSymbol, state.selectedInterval).catch(() => {});
             connectKlineSocket();
@@ -744,6 +776,7 @@ function showNotification(message, type = "ok") {
 
 async function initialize() {
     setConnectionStatus("Cargando mercado...");
+    renderDiagnostics();
     loadState();
     buildAssetSelector();
     buildChart();
@@ -753,6 +786,7 @@ async function initialize() {
     try {
         await loadInitialMarket();
         setConnectionStatus("Conectado por REST", "connected");
+        pushDiagnostic(`Conexion REST OK (${activeRestBase}).`);
         renderStats();
         renderMarketCards();
         updatePortfolio();
@@ -767,8 +801,21 @@ async function initialize() {
         renderMarketCards();
         updatePortfolio();
         showNotification("Fallo la conexion inicial con Binance. Revisa tu red o region.", "error");
+        pushDiagnostic(`Fallo inicial: ${error.message || error}`, "error");
         console.error(error);
     }
 }
+
+window.onerror = (msg, url, line, col, error) => {
+    pushDiagnostic(`JS error: ${msg} (linea ${line})`, "error");
+    console.error("window.onerror", { msg, url, line, col, error });
+    return false;
+};
+
+window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason?.message || String(event.reason);
+    pushDiagnostic(`Promesa rechazada: ${reason}`, "error");
+    console.error("unhandledrejection", event.reason);
+});
 
 window.addEventListener("DOMContentLoaded", initialize);
