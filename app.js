@@ -3,8 +3,8 @@ const BINANCE_REST_BASES = [
     "https://api.binance.com/api/v3"
 ];
 const BINANCE_WS_BASES = [
-    "wss://data-stream.binance.vision/stream?streams=",
-    "wss://stream.binance.com:9443/stream?streams="
+    "wss://stream.binance.com:9443/stream?streams=",
+    "wss://data-stream.binance.vision/stream?streams="
 ];
 
 const STORAGE_KEY = "cryptolearn_pro_state_v2";
@@ -44,6 +44,7 @@ let activeWsBase = BINANCE_WS_BASES[0];
 let tickerPollTimer = null;
 let candlePollTimer = null;
 let diagnostics = [];
+let klineSocketVersion = 0;
 
 function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -338,7 +339,17 @@ async function loadCandles(symbol, interval) {
 
 function connectKlineSocket() {
     if (klineSocket) {
-        klineSocket.close();
+        klineSocket.onopen = null;
+        klineSocket.onmessage = null;
+        klineSocket.onclose = null;
+        klineSocket.onerror = null;
+        try {
+            if (klineSocket.readyState === WebSocket.OPEN || klineSocket.readyState === WebSocket.CONNECTING) {
+                klineSocket.close(1000, "switch stream");
+            }
+        } catch (_err) {
+            // Ignore socket close race.
+        }
         klineSocket = null;
     }
 
@@ -347,14 +358,17 @@ function connectKlineSocket() {
         return;
     }
 
+    const thisSocketVersion = ++klineSocketVersion;
     const stream = `${state.selectedSymbol.toLowerCase()}@kline_${state.selectedInterval}`;
     klineSocket = new WebSocket(`${activeWsBase}${stream}`);
 
     klineSocket.onopen = () => {
+        if (thisSocketVersion !== klineSocketVersion) return;
         clearTimeout(reconnectKlineTimer);
     };
 
     klineSocket.onmessage = (event) => {
+        if (thisSocketVersion !== klineSocketVersion) return;
         const payload = JSON.parse(event.data);
         const kline = payload?.data?.k;
         if (!kline) return;
@@ -384,6 +398,7 @@ function connectKlineSocket() {
     };
 
     klineSocket.onclose = () => {
+        if (thisSocketVersion !== klineSocketVersion) return;
         pushDiagnostic("WebSocket de velas cerrado; reintentando.", "warn");
         reconnectKlineTimer = setTimeout(async () => {
             await loadCandles(state.selectedSymbol, state.selectedInterval).catch(() => {});
