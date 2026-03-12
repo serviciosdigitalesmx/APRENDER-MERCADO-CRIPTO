@@ -129,6 +129,10 @@ function formatUsdt(value) {
     return `${Number(value || 0).toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT`;
 }
 
+function usdtToMxn(valueUsdt) {
+    return Number(valueUsdt || 0) * Number(state.usdtMxn || FALLBACK_USDT_MXN);
+}
+
 function shortNumber(value) {
     const num = Number(value || 0);
     if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)}B`;
@@ -518,7 +522,7 @@ function updateCoachPanel() {
         insights.push(`Aun no tienes ${selectedAsset.coin}. Puedes probar entradas pequenas para practicar gestion de riesgo.`);
     }
 
-    summaryEl.textContent = `${selectedAsset.coin} en ${state.selectedInterval} | Precio ${selectedMarket.price.toFixed(4)} USDT`;
+    summaryEl.textContent = `${selectedAsset.coin} en ${state.selectedInterval} | Precio ${formatMxn(usdtToMxn(selectedMarket.price))}`;
     listEl.innerHTML = insights.map((item) => `<li>${item}</li>`).join("");
 }
 
@@ -550,12 +554,12 @@ function renderStats() {
 
     document.getElementById("selectedSymbol").textContent = selected.symbol;
     document.getElementById("selectedName").textContent = selected.name;
-    document.getElementById("selectedPrice").textContent = ticker.price.toFixed(6);
-    document.getElementById("selectedChange").textContent = `${ticker.changePct >= 0 ? "+" : ""}${ticker.changePct.toFixed(2)}% (24h)`;
+    document.getElementById("selectedPrice").textContent = formatMxn(usdtToMxn(ticker.price));
+    document.getElementById("selectedChange").textContent = `${ticker.changePct >= 0 ? "+" : ""}${ticker.changePct.toFixed(2)}% (24h) | ${ticker.price.toFixed(6)} USDT`;
     document.getElementById("selectedChange").className = `stat-change ${ticker.changePct >= 0 ? "positive" : "negative"}`;
 
-    document.getElementById("selectedVolume").textContent = shortNumber(ticker.volumeQuote);
-    document.getElementById("selectedRange").textContent = `Rango 24h: ${ticker.low.toFixed(4)} - ${ticker.high.toFixed(4)}`;
+    document.getElementById("selectedVolume").textContent = shortNumber(usdtToMxn(ticker.volumeQuote));
+    document.getElementById("selectedRange").textContent = `Rango 24h: ${formatMxn(usdtToMxn(ticker.low))} - ${formatMxn(usdtToMxn(ticker.high))}`;
     document.getElementById("usdtMxnRate").textContent = state.usdtMxn.toFixed(4);
 }
 
@@ -602,6 +606,8 @@ function renderMarketCards() {
         const price = ticker?.price || 0;
         const change = ticker?.changePct || 0;
         const holdingValueMxn = asset.qty * price * state.usdtMxn;
+        const priceMxn = usdtToMxn(price);
+        const avgMxn = usdtToMxn(asset.avgPriceUsdt);
 
         const card = document.createElement("div");
         card.className = "crypto-card";
@@ -613,10 +619,11 @@ function renderMarketCards() {
                     <div class="crypto-symbol">${asset.symbol}</div>
                 </div>
             </div>
-            <div class="crypto-price">${price ? formatUsdt(price) : "Cargando..."}</div>
+            <div class="crypto-price">${price ? formatMxn(priceMxn) : "Cargando..."}</div>
+            <div class="crypto-symbol">${price ? `${price.toFixed(6)} USDT` : "-"}</div>
             <div class="crypto-symbol ${change >= 0 ? "positive" : "negative"}">${change >= 0 ? "+" : ""}${change.toFixed(2)}% (24h)</div>
             <div class="crypto-symbol">Posicion: ${asset.qty.toFixed(6)} ${asset.coin}</div>
-            <div class="crypto-symbol">Promedio: ${asset.avgPriceUsdt ? asset.avgPriceUsdt.toFixed(6) : "-"} USDT</div>
+            <div class="crypto-symbol">Promedio: ${asset.avgPriceUsdt ? `${formatMxn(avgMxn)} (${asset.avgPriceUsdt.toFixed(6)} USDT)` : "-"}</div>
             <div class="crypto-symbol">Valor MXN: ${formatMxn(holdingValueMxn)}</div>
             <div class="trade-controls">
                 <input type="number" min="0" step="0.0001" placeholder="Cantidad" id="qty-${asset.symbol}">
@@ -647,7 +654,7 @@ function renderTransactions() {
                     <td class="${tx.type === "COMPRA" ? "positive" : "negative"}">${tx.type}</td>
                     <td>${tx.symbol}</td>
                     <td>${tx.qty.toFixed(6)}</td>
-                    <td>${tx.priceUsdt.toFixed(6)}</td>
+                    <td>${formatMxn(tx.priceMxn ?? (tx.priceUsdt * (tx.usdtMxn ?? state.usdtMxn)))}</td>
                     <td>${formatMxn(tx.totalMxn)}</td>
                     <td>${tx.note || "-"}</td>
                 </tr>
@@ -703,6 +710,8 @@ function buyAsset(symbol) {
         symbol,
         qty,
         priceUsdt: ticker.price,
+        usdtMxn: state.usdtMxn,
+        priceMxn: usdtToMxn(ticker.price),
         totalMxn,
         note: "Entrada simulada"
     });
@@ -751,6 +760,8 @@ function sellAsset(symbol) {
         symbol,
         qty,
         priceUsdt: ticker.price,
+        usdtMxn: state.usdtMxn,
+        priceMxn: usdtToMxn(ticker.price),
         totalMxn,
         note: `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}% vs promedio`
     });
