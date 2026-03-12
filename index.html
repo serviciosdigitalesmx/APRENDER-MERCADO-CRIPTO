@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoLearn Pro - Simulador Binance en Tiempo Real</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="./styles.css">
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="./app.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div>
+                <h1><i class="fab fa-bitcoin"></i> CryptoLearn Pro</h1>
+                <p class="subtitle">Simulador educativo conectado a Binance Spot (precios y velas reales)</p>
+            </div>
+            <div class="connection-badge" id="connectionBadge">Conectando...</div>
+        </header>
+
+        <section class="portfolio-card">
+            <h2><i class="fas fa-wallet"></i> Portfolio Virtual</h2>
+            <div class="portfolio-grid">
+                <div class="portfolio-item">
+                    <div class="portfolio-label">Saldo disponible (MXN)</div>
+                    <div class="portfolio-value" id="availableBalance">$0</div>
+                </div>
+                <div class="portfolio-item">
+                    <div class="portfolio-label">Valor en criptos (MXN)</div>
+                    <div class="portfolio-value" id="cryptoValue">$0</div>
+                </div>
+                <div class="portfolio-item">
+                    <div class="portfolio-label">Valor total (MXN)</div>
+                    <div class="portfolio-value" id="totalValue">$0</div>
+                </div>
+                <div class="portfolio-item">
+                    <div class="portfolio-label">Ganancia / Perdida</div>
+                    <div class="portfolio-value" id="pnl">$0</div>
+                </div>
+            </div>
+            <div class="portfolio-actions">
+                <button class="btn btn-secondary" id="addFundsBtn"><i class="fas fa-plus"></i> Agregar $1,000 MXN virtuales</button>
+                <button class="btn btn-secondary" id="resetPortfolioBtn"><i class="fas fa-rotate-left"></i> Reiniciar simulador</button>
+            </div>
+        </section>
+
+        <section class="market-stats">
+            <div class="stat-card">
+                <div class="stat-label">Activo seleccionado</div>
+                <div class="stat-value" id="selectedSymbol">-</div>
+                <div class="stat-change" id="selectedName">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Precio actual (USDT)</div>
+                <div class="stat-value" id="selectedPrice">-</div>
+                <div class="stat-change" id="selectedChange">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Volumen 24h (USDT)</div>
+                <div class="stat-value" id="selectedVolume">-</div>
+                <div class="stat-change" id="selectedRange">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Tasa USDT/MXN</div>
+                <div class="stat-value" id="usdtMxnRate">-</div>
+                <div class="stat-change">Referencia para simulacion en pesos</div>
+            </div>
+        </section>
+
+        <section class="main-grid">
+            <article class="panel chart-panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-chart-candlestick"></i> Velas en vivo</h3>
+                    <div class="controls-row">
+                        <label for="assetSelector">Activo</label>
+                        <select id="assetSelector"></select>
+                        <label for="intervalSelector">Intervalo</label>
+                        <select id="intervalSelector">
+                            <option value="1m">1m</option>
+                            <option value="5m">5m</option>
+                            <option value="15m">15m</option>
+                            <option value="1h">1h</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="chartContainer"></div>
+            </article>
+
+            <article class="panel coach-panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-user-graduate"></i> Mentor en vivo</h3>
+                </div>
+                <div id="coachSummary" class="coach-summary">Esperando datos del mercado...</div>
+                <ul id="coachList" class="coach-list"></ul>
+                <p class="risk-note">Educativo solamente. No es consejo financiero.</p>
+            </article>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h3><i class="fas fa-coins"></i> Mercado (Binance Spot)</h3>
+            </div>
+            <div class="crypto-grid" id="cryptoGrid"></div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h3><i class="fas fa-clock-rotate-left"></i> Historial de operaciones</h3>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Tipo</th>
+                            <th>Par</th>
+                            <th>Cantidad</th>
+                            <th>Precio (USDT)</th>
+                            <th>Total (MXN)</th>
+                            <th>Resultado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</body>
+</html>
